@@ -895,6 +895,35 @@ describe("AcpBackendProcess", () => {
       expect(result.transcript?.map((m) => m.message)).toEqual(["hi", "hello"]);
     });
 
+    it("keeps replayed frames the SDK dispatches after the load response resolves https://github.com/Brevilabs/obsidian-copilot-private/issues/602", async () => {
+      const backend = await startLoadCapableBackend();
+      mockLoadSession.mockImplementationOnce(async () => {
+        const push = replayer(backend);
+        // opencode writes its replay in the same burst as the response, and the
+        // SDK resolves the response before its async handler chain delivers the
+        // frames that preceded it on the wire.
+        let late = Promise.resolve();
+        for (let i = 0; i < 20; i++) late = late.then(() => undefined);
+        void late.then(() => {
+          push({
+            sessionUpdate: "user_message_chunk",
+            messageId: "m1",
+            content: { type: "text", text: "hi" },
+          });
+          push({
+            sessionUpdate: "agent_message_chunk",
+            messageId: "m2",
+            content: { type: "text", text: "hello" },
+          });
+        });
+        return {};
+      });
+
+      const result = await backend.loadSession({ sessionId: "ses_load", cwd: "/vault" });
+
+      expect(result.transcript?.map((m) => m.message)).toEqual(["hi", "hello"]);
+    });
+
     it("collects a replay longer than the pending-update buffer allows", async () => {
       const backend = await startLoadCapableBackend();
       mockLoadSession.mockImplementationOnce(async () => {

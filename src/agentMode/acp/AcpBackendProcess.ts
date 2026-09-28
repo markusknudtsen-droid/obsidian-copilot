@@ -752,6 +752,12 @@ export class AcpBackendProcess implements BackendProcess {
           }),
         { mustBeAdvertised: true }
       );
+      // The SDK settles a response as soon as it reads it but delivers each
+      // notification through an async handler chain, so replay frames sent in
+      // the same burst as the response are still in flight here. Those chains
+      // stay on the microtask queue, so one task boundary lets them all land.
+      // https://github.com/Brevilabs/obsidian-copilot-private/issues/602
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       this.hasServedSession = true;
       this.recordWireState(sessionIdToAcp(sessionId), {
         modes: wireResp.modes ?? null,
